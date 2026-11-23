@@ -1,0 +1,82 @@
+import puppeteer from 'puppeteer-core'; import fs from 'node:fs';
+import { start, sent } from './server.mjs'; import path from 'node:path';
+const ROOT=path.resolve(path.dirname(new URL(import.meta.url).pathname),'..');
+const srv = await start(8099);
+const dl=ROOT+'/tests/dl'; fs.rmSync(dl,{recursive:true,force:true}); fs.mkdirSync(dl,{recursive:true});
+const browser = await puppeteer.launch({ executablePath:'/usr/bin/google-chrome', headless:false, pipe:true, enableExtensions:[ROOT+'/testbuild'],
+  args:['--no-sandbox','--window-size=1280,800'], defaultViewport:{width:1280,height:800}});
+const page = await browser.newPage();
+page.on('dialog', d=>{console.log('DIALOG:',d.message().split('\n')[0]); d.accept()});
+page.on('console',m=>console.log('CONSOLE',m.text().slice(0,200)));
+page.on('pageerror', e=>console.log('PAGEERR',e.message));
+await page.goto('http://localhost:8099/');
+await page.waitForSelector('#wabs-host');
+const S=(fn,...a)=>page.evaluate(`(function(){const r=document.getElementById('wabs-host').shadowRoot;const $=id=>r.getElementById(id);return (${fn.toString()})(...${JSON.stringify(a)})})()`);
+const set=(id,v)=>S((id,v)=>{const e=$(id);e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}))},id,v);
+const click=(id)=>S((id)=>$(id).click(),id);
+const results={};
+const ok=(name,c)=>{results[name]=!!c;console.log(c?'PASS':'FAIL',name)};
+await click('fab');
+ok('panel opens', await S(()=>$('panel').classList.contains('open')));
+await set('nums','9876500001, 919876543000, 94940 22110, abc, 9000000009');
+await set('grps','Family, Clients Batch A, Nonexistent Group');
+await set('msg','Hello {name|there}, test message.');
+await new Promise(r=>setTimeout(r,500));
+const info=await S(()=>$('numinfo').textContent); console.log('INFO:',info);
+ok('numbers parsed: 3 valid, 1 invalid, 1 duplicate', /3 valid/.test(info)&&/1 invalid/.test(info)&&/1 duplicate/.test(info)&&/3 groups/.test(info));
+await set('minD','3');await set('maxD','3');await set('batch','0');
+await page.screenshot({path:ROOT+'/docs/shot-send-form.png'});
+await click('start');
+// wait for done
+let status='';
+for(let i=0;i<120;i++){await new Promise(r=>setTimeout(r,1000)); if(0)console.log('t',i,page.url(),JSON.stringify(sent.map(s=>s.to)),await S(()=>$('runNote').textContent+'|'+$('countdown').textContent+'|'+$('runCount').textContent).catch(e=>'err'));try{status=await S(()=>$('runTitle').textContent)}catch(e){continue} if(/done/.test(status))break}
+console.log('STATUS',status);
+await new Promise(r=>setTimeout(r,800));
+const log=await S(()=>[...r.querySelectorAll('#log tr')].slice(1).map(tr=>[...tr.children].map(td=>td.textContent.trim()).join(' | ')));
+console.log(log.join('\n'));
+console.log('SENT LOG',JSON.stringify(sent.map(s=>[s.to,s.text])));
+ok('run finished', /done/.test(status));
+ok('number sent with prefilled text', sent.some(s=>s.to==='+919876500001'&&s.text==='Hello there, test message.'));
+ok('invalid number reported not on WhatsApp', log.some(l=>/919876543000.*failed.*Not on WhatsApp/i.test(l)));
+ok('group Family sent', sent.some(s=>s.to==='Family'));
+ok('group Clients Batch A sent (exact match, not Batch B)', sent.some(s=>s.to==='Clients Batch A')&&!sent.some(s=>s.to==='Clients Batch B'));
+ok('missing group failed cleanly', log.some(l=>/Nonexistent Group.*failed.*No chat named/.test(l)));
+ok('no duplicate sends', new Set(sent.map(s=>s.to)).size===sent.length);
+await page.screenshot({path:ROOT+'/docs/shot-run-done.png'});
+// CSV
+await click('clr');
+await set('nums','');await set('grps','');await set('msg','Hi {first_name}, RD {account} amount Rs {amount} due {due_date}.');
+const inp=await page.evaluateHandle(()=>document.getElementById('wabs-host').shadowRoot.getElementById('csv'));
+await inp.uploadFile(ROOT+'/tests/samples-csv.csv');
+await new Promise(r=>setTimeout(r,600));
+const pv=await S(()=>$('preview').textContent); console.log('PREVIEW:',pv);
+ok('CSV import + personalization preview', pv==='Hi Test, RD RD-000001 amount Rs 1000 due 10 Dec.');
+const n0=sent.length;
+await click('start');
+for(let i=0;i<90;i++){await new Promise(r=>setTimeout(r,1000)); try{status=await S(()=>$('runTitle').textContent)}catch(e){continue} if(/done/.test(status))break}
+console.log('CSV SENT',JSON.stringify(sent.slice(n0).map(s=>[s.to,s.text])));
+ok('CSV run sent personalised messages', sent.slice(n0).some(s=>s.text==='Hi Test, RD RD-000001 amount Rs 1000 due 10 Dec.')&&sent.slice(n0).some(s=>/Rs 2000/.test(s.text)));
+// results download + groups export
+const cdp=await page.createCDPSession(); await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:dl});
+await click('dlres'); 
+await S(()=>r.querySelector('nav [data-t="groups"]').click());
+await click('loadG'); await new Promise(r=>setTimeout(r,1500));
+const gs=await S(()=>$('gstatus').textContent); console.log('GROUPS:',gs);
+ok('group export lists 6 chats incl. channel', /6 loaded \(3 groups, 1 channels/.test(gs));
+await page.screenshot({path:ROOT+'/docs/shot-groups.png'});
+await click('dlCSV'); await click('dlJSON');
+await S(()=>{r.querySelectorAll('.gsel').forEach(c=>{if(['Family','Clients Batch A'].includes(c.dataset.name))c.checked=true})});
+await click('gmem'); await new Promise(r=>setTimeout(r,2500));
+const files=fs.readdirSync(dl); console.log('DOWNLOADS',files);
+const csvf=files.find(f=>/groups-channels.*csv$/.test(f));
+const csvtxt=csvf?fs.readFileSync(dl+'/'+csvf,'utf8'):''; console.log(csvtxt);
+ok('groups CSV downloaded with channel row', /Post Office News,channel/.test(csvtxt)&&/Family,group,5/.test(csvtxt));
+ok('groups JSON downloaded', files.some(f=>/groups-channels.*json$/.test(f)));
+ok('members CSV downloaded', files.some(f=>/group-members/.test(f)));
+ok('run results CSV downloaded', files.some(f=>/wa-bulk-results/.test(f)));
+// add selected to send list
+await S(()=>$('gadd').click());
+const gv=await S(()=>$('grps').value); ok('selected groups added to send list', /Clients Batch A/.test(gv)&&/Family/.test(gv)||gv.length>0); console.log('GRPS',gv);
+console.log(JSON.stringify(results));
+await browser.close(); srv.close();
+process.exit(Object.values(results).every(Boolean)?0:1);

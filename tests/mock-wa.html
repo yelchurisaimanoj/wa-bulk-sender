@@ -1,0 +1,31 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Mock WhatsApp Web (test harness)</title>
+<style>body{margin:0;font-family:sans-serif;display:flex;height:100vh;background:#efeae2}#app{display:flex;width:100%}
+#side{width:340px;background:#fff;border-right:1px solid #ddd;display:flex;flex-direction:column}
+#side .s{padding:8px}#side [data-tab="3"]{border:1px solid #ccc;border-radius:8px;padding:8px;min-height:20px}
+#pane-side{overflow:auto;flex:1}.row{padding:12px;border-bottom:1px solid #eee;cursor:pointer}
+#main{flex:1;display:flex;flex-direction:column}header{background:#f0f2f5;padding:12px;font-weight:600}
+#msgs{flex:1;padding:12px;overflow:auto}.m{background:#d9fdd3;padding:6px 10px;margin:4px 0 4px auto;border-radius:8px;max-width:60%;white-space:pre-wrap;width:fit-content}
+footer{background:#f0f2f5;padding:8px;display:flex;gap:8px;align-items:center}footer [contenteditable]{flex:1;background:#fff;border-radius:8px;padding:8px;min-height:20px}
+.dlg{position:fixed;top:30%;left:40%;background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 12px #0006}</style></head>
+<body><div id="app"><div id="side"><div class="s"><div contenteditable="true" role="textbox" data-tab="3" aria-label="Search input textbox"></div></div><div id="pane-side"></div></div>
+<div id="main"><header><span title="" id="ht"></span></header><div id="msgs"></div>
+<footer id="foot" style="display:none"><div contenteditable="true" role="textbox" data-tab="10" id="comp"></div><button aria-label="Send" id="sendbtn" style="display:none">Send</button></footer></div></div>
+<script>
+const CHATS=[["Family","group",5],["Clients Batch A","group",12],["Clients Batch B","group",9],["Post Office News","channel",1200],["Ravi Kumar","chat",""],["Lakshmi","chat",""]];
+const side=document.querySelector('[data-tab="3"]'),pane=document.getElementById('pane-side'),comp=document.getElementById('comp'),ht=document.getElementById('ht'),msgs=document.getElementById('msgs'),sendbtn=document.getElementById('sendbtn');
+function renderList(){const q=side.innerText.trim().toLowerCase();pane.innerHTML='';
+ CHATS.filter(c=>!q||c[0].toLowerCase().includes(q)).forEach(c=>{const r=document.createElement('div');r.className='row';r.setAttribute('role','listitem');r.tabIndex=0;r.innerHTML='<span title="'+c[0]+'">'+c[0]+'</span>';r.onclick=()=>openChat(c[0]);pane.appendChild(r)})}
+side.addEventListener('input',renderList);renderList();
+function openChat(t,text){document.getElementById('foot').style.display='flex';ht.setAttribute('title',t);ht.textContent=t;comp.innerText=text||'';msgs.innerHTML='';upd()}
+function upd(){sendbtn.style.display=comp.innerText.trim()?'block':'none'}
+comp.addEventListener('input',upd);
+function doSend(){const t=comp.innerText.trim();if(!t)return;const d=document.createElement('div');d.className='m';d.textContent=t;msgs.appendChild(d);
+ fetch('/log',{method:'POST',body:JSON.stringify({to:ht.getAttribute('title'),text:t,at:Date.now()})});comp.innerText='';upd()}
+sendbtn.onclick=doSend;
+const u=new URLSearchParams(location.search),ph=u.get('phone');
+if(ph){ if(ph.endsWith('000')){setTimeout(()=>{const d=document.createElement('div');d.className='dlg';d.setAttribute('role','dialog');d.innerHTML='<p>Phone number shared via url is invalid.</p><button>OK</button>';d.querySelector('button').onclick=()=>d.remove();document.body.appendChild(d)},600)}
+ else setTimeout(()=>openChat('+'+ph,u.get('text')||''),1200)}
+window.require=function(n){
+ if(n==='WAWebCollections')return{Chat:{getModelsArray:()=>CHATS.map(c=>({id:{_serialized:c[1]==='channel'?'120363@newsletter':(c[1]==='group'?String(c[2])+Math.abs(c[0].length)+'@g.us':'9199'+c[0].length+'@c.us'),server:c[1]==='channel'?'newsletter':(c[1]==='group'?'g.us':'c.us'),user:'1'},isGroup:c[1]==='group',formattedTitle:c[0],groupMetadata:c[1]==='group'?{participants:{getModelsArray:()=>Array.from({length:c[2]},(_,i)=>({id:{user:'91900000'+(1000+i),_serialized:'91900000'+(1000+i)+'@c.us'},isAdmin:i==0}))}}:null}))},Contact:{get:()=>({name:'Test Contact'})}};
+ throw new Error('no module '+n)};
+</script></body></html>
