@@ -25,7 +25,12 @@ sendbtn.onclick=doSend;
 const u=new URLSearchParams(location.search),ph=u.get('phone');
 if(ph){ if(ph.endsWith('000')){setTimeout(()=>{const d=document.createElement('div');d.className='dlg';d.setAttribute('role','dialog');d.innerHTML='<p>Phone number shared via url is invalid.</p><button>OK</button>';d.querySelector('button').onclick=()=>d.remove();document.body.appendChild(d)},600)}
  else setTimeout(()=>openChat('+'+ph,u.get('text')||''),1200)}
+const NOMODS=localStorage.getItem('nomods')==='1';
 window.require=function(n){
- if(n==='WAWebCollections')return{Chat:{getModelsArray:()=>CHATS.map(c=>({id:{_serialized:c[1]==='channel'?'120363@newsletter':(c[1]==='group'?String(c[2])+Math.abs(c[0].length)+'@g.us':'9199'+c[0].length+'@c.us'),server:c[1]==='channel'?'newsletter':(c[1]==='group'?'g.us':'c.us'),user:'1'},isGroup:c[1]==='group',formattedTitle:c[0],groupMetadata:c[1]==='group'?{participants:{getModelsArray:()=>Array.from({length:c[2]},(_,i)=>({id:{user:'91900000'+(1000+i),_serialized:'91900000'+(1000+i)+'@c.us'},isAdmin:i==0}))}}:null}))},Contact:{get:()=>({name:'Test Contact'})}};
+ if(!NOMODS&&n==='WAWebWidFactory')return{createWid:s=>({_serialized:s,user:s.split('@')[0]})};
+ if(!NOMODS&&n==='WAWebFindChatAction')return{findOrCreateLatestChat:async w=>({chat:{id:w}})};
+ if(!NOMODS&&n==='WAWebCmd')return{Cmd:{openChatBottom:async({chat})=>{openChat('+'+chat.id.user,'');window.__active=chat.id._serialized}}};
+
+ if(n==='WAWebCollections')return{Chat:{getActive:()=>window.__active?{id:{_serialized:window.__active}}:null,getModelsArray:()=>CHATS.map(c=>({id:{_serialized:c[1]==='channel'?'120363@newsletter':(c[1]==='group'?String(c[2])+Math.abs(c[0].length)+'@g.us':'9199'+c[0].length+'@c.us'),server:c[1]==='channel'?'newsletter':(c[1]==='group'?'g.us':'c.us'),user:'1'},isGroup:c[1]==='group',formattedTitle:c[0],groupMetadata:c[1]==='group'?{participants:{getModelsArray:()=>Array.from({length:c[2]},(_,i)=>({id:{user:'91900000'+(1000+i),_serialized:'91900000'+(1000+i)+'@c.us'},isAdmin:i==0}))}}:null}))},Contact:{get:()=>({name:'Test Contact'})}};
  throw new Error('no module '+n)};
 </script></body></html>

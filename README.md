@@ -8,7 +8,7 @@ Everything runs inside your own browser. Nothing is uploaded to any server.
 
 ![Demo](docs/demo.gif)
 
-Full video with captions: [docs/demo.mp4](docs/demo.mp4) (1 min 38 s). It shows installing the extension, sending to two numbers and two groups, and exporting the group list.
+Full video with captions: [docs/demo.mp4](docs/demo.mp4) (1 min 38 s, recorded with version 1.0; the panel is now smaller and movable). It shows installing the extension, sending to two numbers and two groups, and exporting the group list.
 
 > The video uses a practice page that looks like WhatsApp Web, so no real person was messaged while recording. On your own computer you use the real web.whatsapp.com.
 
@@ -18,7 +18,7 @@ WhatsApp does not allow spam and can restrict or ban numbers that send unwanted 
 
 - Message only people who know you and expect to hear from you (your own clients, your own groups).
 - Start small: 10 to 20 messages a day for the first week. Keep volumes modest after that.
-- Keep the default delays (8 to 20 seconds, with a break every 30 messages). Use the "Careful" preset for bigger lists.
+- Keep the delays on. The default is a random 4 to 9 seconds between messages with a short break every 40. Use the "Careful" preset (8 to 18 seconds) for bigger lists, and avoid "Fast" except for a handful of people.
 - Add an opt-out line such as "Reply STOP to skip reminders", and put anyone who opts out in the **Lists > Do not message** box.
 - If WhatsApp shows a warning or messages stop going through, stop and wait a day.
 - This is not an official WhatsApp product. Using it is at your own risk.
@@ -36,7 +36,9 @@ Works on Chrome, Edge, Brave on a computer (not on phones).
 
 ## Use it
 
-Open the panel with the green **✉** button at the bottom right of WhatsApp Web, or by clicking the extension icon in the toolbar.
+Open the panel with the small green **✉** button on the right edge of WhatsApp Web, or by clicking the extension icon in the toolbar.
+
+The panel floats over WhatsApp Web and never takes the whole screen: drag it by its title bar, press **—** (or double-click the title) to shrink it to a small bar with Pause/Resume/Stop, or **✕** to hide it (a running send keeps going). It shrinks by itself when you press Start.
 
 ### Send tab
 
@@ -48,7 +50,7 @@ Open the panel with the green **✉** button at the bottom right of WhatsApp Web
    - `{name|there}` means "use the name, or `there` if the name is empty"
    - A live preview shows the first message exactly as it will go out.
 5. **Image** (optional, experimental): attaches one image and uses the message as caption.
-6. **Safety**: pick Careful, Normal or Fast, or set your own delay range, break length and "max messages this run". You can also set a start time. Keep the tab open until then.
+6. **Safety**: pick Careful, Normal or Fast, or set your own delay range (minimum 2 seconds), break length and "max messages this run". You can also set a start time. Keep the tab open until then.
 7. **Preview list** shows who will get the message and a rough time. **Start sending** asks you to confirm.
 
 While it runs you can **Pause**, **Resume** or **Stop**. Failures (number not on WhatsApp, group not found, send not confirmed) are listed with the reason. **Retry failed** tries only those again. **Download results** saves a CSV report.
@@ -84,7 +86,7 @@ Keep real client lists on your computer only. Do not commit them to a public rep
 
 ## How it works
 
-- Numbers are opened with WhatsApp's own click-to-chat link (`web.whatsapp.com/send?phone=...`) and sent from the normal message box. The page reloads once per number, which is normal.
+- Numbers are opened inside the running WhatsApp Web page, with no reload: first with WhatsApp's own open-chat command, then by searching the number in the chat list. Only if both fail does it fall back to the click-to-chat link (`web.whatsapp.com/send?phone=...`), which reloads the page. In the no-reload mode a number that is not on WhatsApp is not detected up front, so check the chat if a message shows one grey tick.
 - Groups are found by typing the name into WhatsApp Web's search box and opening the exact match.
 - The group and channel list is read from WhatsApp Web's in-memory chat list (read-only). If that is not reachable after a WhatsApp update, it falls back to scrolling the visible chat list, and types then show as `chat`.
 - The run queue is saved in the browser, so a reload or a crash never sends the same message twice. If the page reloads at the exact moment of pressing Send, that entry is marked `unknown` for you to check manually.
@@ -94,7 +96,6 @@ Keep real client lists on your computer only. Do not commit them to a public rep
 - WhatsApp changes its web page often. The extension tries several selectors for each part, but an update can still break a step. If a step stops working, open an issue with a screenshot.
 - Sending images and reading channel lists depend most on WhatsApp's internals and are the most likely to need a fix.
 - Tested here against a local stand-in page for WhatsApp Web (see below), not against a live WhatsApp account. Test with your own number first.
-- No messages are sent to numbers that are not on WhatsApp, and invalid numbers are reported, not retried.
 
 ## Tests
 
@@ -103,7 +104,8 @@ Keep real client lists on your computer only. Do not commit them to a public rep
 ```
 cd tests && npm i puppeteer-core
 sh make-testbuild.sh          # copies the extension and also allows the mock page on localhost:8099
-node run-tests.mjs            # 17 checks: number parsing, send to numbers and groups, CSV personalisation, exports
+node run-tests.mjs            # 17 checks: number parsing, send to numbers and groups with no page reload, CSV personalisation, exports
+NOMODS=1 node run-tests.mjs   # same checks through the reload fallback
 ```
 
 ## Files

@@ -2,23 +2,47 @@
   "manifest_version": 3,
   "name": "WA Bulk Sender",
   "short_name": "WA Bulk Sender",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Send WhatsApp messages in bulk from WhatsApp Web to numbers and groups, with templates, safe delays, retry and group/channel export.",
-  "permissions": ["storage", "unlimitedStorage"],
-  "host_permissions": ["https://web.whatsapp.com/*"],
-  "action": { "default_title": "WA Bulk Sender: open panel" },
-  "background": { "service_worker": "background.js" },
-  "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "permissions": [
+    "storage",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "https://web.whatsapp.com/*"
+  ],
+  "action": {
+    "default_title": "WA Bulk Sender: open panel"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "content_scripts": [
     {
-      "matches": ["https://web.whatsapp.com/*"],
-      "js": ["content/bridge.js"],
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "content/bridge.js"
+      ],
       "run_at": "document_idle",
       "world": "MAIN"
     },
     {
-      "matches": ["https://web.whatsapp.com/*"],
-      "js": ["content/util.js", "content/wa.js", "content/runner.js", "content/panel.js"],
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "content/util.js",
+        "content/wa.js",
+        "content/runner.js",
+        "content/panel.js"
+      ],
       "run_at": "document_idle"
     }
   ]

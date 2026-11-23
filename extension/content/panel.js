@@ -7,8 +7,14 @@
   const CSS = `
   :host{all:initial}
   *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  .fab{position:fixed;right:14px;bottom:90px;width:48px;height:48px;border-radius:50%;background:#128c7e;color:#fff;border:0;font-size:22px;cursor:pointer;z-index:2147483646;box-shadow:0 2px 8px rgba(0,0,0,.35)}
-  .panel{position:fixed;top:0;right:0;height:100vh;width:400px;max-width:100vw;background:#fff;color:#111;z-index:2147483647;box-shadow:-4px 0 18px rgba(0,0,0,.3);display:none;flex-direction:column;font-size:13px}
+  .fab{position:fixed;right:6px;top:42%;width:36px;height:36px;opacity:.8;border-radius:50%;background:#128c7e;color:#fff;border:0;font-size:22px;cursor:pointer;z-index:2147483646;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+  .panel{position:fixed;top:56px;right:12px;max-height:calc(100vh - 72px);width:360px;max-width:96vw;background:#fff;color:#111;z-index:2147483647;box-shadow:0 4px 22px rgba(0,0,0,.35);border-radius:10px;overflow:hidden;display:none;flex-direction:column;font-size:13px}
+  .panel.mini{width:300px}.panel.mini nav,.panel.mini main{display:none}
+  header{cursor:move;user-select:none;gap:6px}
+  header .hs{flex:1;font-size:12px;opacity:.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  header .hb{font-size:12px;border:1px solid #ffffff88;border-radius:4px;padding:1px 6px;display:none}
+  header button{font-size:16px;padding:0 4px}
+  header .hb{font-size:12px}
   .panel.open{display:flex}
   header{background:#075e54;color:#fff;padding:10px 12px;display:flex;align-items:center;justify-content:space-between}
   header b{font-size:15px}
@@ -45,7 +51,7 @@
   root.innerHTML = `<style>${CSS}</style>
   <button class="fab" id="fab" title="WA Bulk Sender">✉</button>
   <div class="panel" id="panel">
-    <header><b>WA Bulk Sender</b><button id="close" title="Close">✕</button></header>
+    <header id="hdr"><b>WA Bulk Sender</b><span class="hs" id="hstat"></span><button class="hb" id="hpause">Pause</button><button class="hb" id="hresume">Resume</button><button class="hb" id="hstop">Stop</button><button id="minb" title="Minimize / expand">—</button><button id="close" title="Hide (run keeps going)">✕</button></header>
     <nav id="nav"><button data-t="send" class="on">Send</button><button data-t="groups">Groups</button><button data-t="lists">Lists</button><button data-t="help">Tips</button></nav>
     <main>
     <section id="t-send" class="on">
@@ -68,9 +74,9 @@
       <input type="file" id="img" accept="image/*">
       <div class="box">
         <b>Safety</b>
-        <div class="row" style="margin-top:6px"><select id="preset"><option value="careful">Careful (15-40s, break every 20)</option><option value="normal" selected>Normal (8-20s, break every 30)</option><option value="fast">Fast (5-10s, risky)</option><option value="custom">Custom</option></select></div>
-        <div class="row"><div><small>Min delay (s)</small><input type="number" id="minD" min="3" value="8"></div><div><small>Max delay (s)</small><input type="number" id="maxD" min="3" value="20"></div></div>
-        <div class="row"><div><small>Break after N sends</small><input type="number" id="batch" min="0" value="30"></div><div><small>Break length (min)</small><input type="number" id="batchP" min="0" value="5"></div></div>
+        <div class="row" style="margin-top:6px"><select id="preset"><option value="careful">Careful (8-18s, break every 25)</option><option value="normal" selected>Normal (4-9s, break every 40)</option><option value="fast">Fast (2-5s, riskier)</option><option value="custom">Custom</option></select></div>
+        <div class="row"><div><small>Min delay (s)</small><input type="number" id="minD" min="2" value="4"></div><div><small>Max delay (s)</small><input type="number" id="maxD" min="2" value="9"></div></div>
+        <div class="row"><div><small>Break after N sends</small><input type="number" id="batch" min="0" value="40"></div><div><small>Break length (min)</small><input type="number" id="batchP" min="0" value="3"></div></div>
         <div class="row"><div><small>Max messages this run</small><input type="number" id="maxRun" min="1" value="50"></div><div><small>Start at (optional)</small><input type="datetime-local" id="startAt"></div></div>
       </div>
       <div class="btns"><button class="btn sec" id="dry">Preview list</button><button class="btn" id="start">Start sending</button></div>
@@ -106,6 +112,7 @@
   </div>`;
   document.documentElement.appendChild(host);
 
+  const DEFAULT_MSG = "Hello {name|there}, ";
   const $ = (id) => root.getElementById(id);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   let csvRecipients = []; // from import
@@ -114,6 +121,18 @@
 
   // ---- open/close, tabs ----
   const setOpen = (o) => { $("panel").classList.toggle("open", o); W.store.set("panelOpen", o); };
+  const setMini = (m) => { $("panel").classList.toggle("mini", m); $("minb").textContent = m ? "▢" : "—"; W.store.set("panelMini", m); };
+  $("minb").onclick = () => setMini(!$("panel").classList.contains("mini"));
+  // drag by header
+  (function () {
+    const p = $("panel"), h = $("hdr");
+    let sx, sy, ox, oy, drag = false;
+    h.addEventListener("pointerdown", (e) => { if (e.target.tagName === "BUTTON") return; drag = true; const r = p.getBoundingClientRect(); sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top; h.setPointerCapture(e.pointerId); });
+    h.addEventListener("pointermove", (e) => { if (!drag) return; const x = Math.min(Math.max(0, ox + e.clientX - sx), innerWidth - 80), y = Math.min(Math.max(0, oy + e.clientY - sy), innerHeight - 40); p.style.left = x + "px"; p.style.top = y + "px"; p.style.right = "auto"; });
+    h.addEventListener("pointerup", () => { if (!drag) return; drag = false; W.store.set("panelPos", { left: p.style.left, top: p.style.top }); });
+    h.addEventListener("dblclick", () => setMini(!p.classList.contains("mini")));
+    W.store.get("panelPos").then((pos) => { if (pos) { p.style.left = pos.left; p.style.top = pos.top; p.style.right = "auto"; } });
+  })();
   $("fab").onclick = () => setOpen(!$("panel").classList.contains("open"));
   $("close").onclick = () => setOpen(false);
   chrome.runtime.onMessage.addListener((m) => {
@@ -127,7 +146,7 @@
   };
 
   // ---- presets ----
-  const PRESETS = { careful: [15, 40, 20, 10], normal: [8, 20, 30, 5], fast: [5, 10, 40, 3] };
+  const PRESETS = { careful: [8, 18, 25, 5], normal: [4, 9, 40, 3], fast: [2, 5, 60, 2] };
   $("preset").onchange = () => {
     const p = PRESETS[$("preset").value];
     if (!p) return;
@@ -208,7 +227,7 @@
   function persist() {
     clearTimeout(pt);
     pt = setTimeout(() => {
-      const d = { partial: $("partial").checked, csv: csvRecipients };
+      const d = { v: 2, partial: $("partial").checked, csv: csvRecipients };
       FIELDS.forEach((f) => (d[f] = $(f).value));
       W.store.set("draft", d);
     }, 300);
@@ -257,7 +276,7 @@
   // ---- build & start ----
   function cfg() {
     const n = (id, d) => { const v = parseInt($(id).value, 10); return isNaN(v) ? d : v; };
-    let minD = Math.max(3, n("minD", 8)), maxD = Math.max(minD, n("maxD", 20));
+    let minD = Math.max(2, n("minD", 4)), maxD = Math.max(minD, n("maxD", 9));
     return { minDelay: minD, maxDelay: maxD, batchSize: n("batch", 0), batchPauseMin: n("batchP", 0), maxPerRun: Math.max(1, n("maxRun", 50)), partialGroups: $("partial").checked };
   }
   async function buildRun() {
@@ -286,11 +305,13 @@
     let warn = "";
     if (total > b.cfg.maxPerRun) warn += `\nOnly the first ${b.cfg.maxPerRun} will be sent now (max per run). You can resume later.`;
     if (total > 100) warn += "\nMore than 100 messages in one go raises the risk of a WhatsApp restriction.";
-    if (b.cfg.minDelay < 5) warn += "\nVery short delays are risky.";
+    if (b.cfg.minDelay < 3) warn += "\nVery short delays raise the risk of a restriction.";
     if (!confirm(`Send to ${b.recipients.length} numbers and ${b.groups.length} groups?${warn}\n\nKeep this tab open until it finishes.`)) return;
     const run = W.runner.build({ recipients: b.recipients, groups: b.groups, groupText: b.groupText, cfg: b.cfg, image: b.image, startAt });
     await W.runner.start(run);
+    setMini(true);
   };
+  $("hpause").onclick = () => W.runner.pause(); $("hresume").onclick = () => W.runner.resume(); $("hstop").onclick = () => confirm("Stop this run?") && W.runner.stop();
   $("pause").onclick = () => W.runner.pause();
   $("resume").onclick = () => W.runner.resume();
   $("stop").onclick = () => confirm("Stop this run?") && W.runner.stop();
@@ -306,7 +327,8 @@
   async function renderRun() {
     const r = await W.store.get("run");
     const box = $("runbox");
-    if (!r) { box.style.display = "none"; return; }
+    const hb = (id, on) => ($(id).style.display = on ? "inline-block" : "none");
+    if (!r) { box.style.display = "none"; $("hstat").textContent = ""; ["hpause", "hresume", "hstop"].forEach((i) => hb(i, false)); return; }
     box.style.display = "block";
     const done = r.items.filter((i) => ["sent", "failed", "unknown"].includes(i.status)).length;
     const sent = r.items.filter((i) => i.status === "sent").length;
@@ -318,6 +340,9 @@
     const active = ["running", "scheduled"].includes(r.status);
     $("pause").disabled = !active; $("resume").disabled = r.status !== "paused"; $("stop").disabled = !(active || r.status === "paused");
     $("retry").disabled = active || !failed;
+    const act = ["running", "scheduled"].includes(r.status);
+    $("hstat").textContent = r.status === "done" ? `Done: ${sent} sent, ${failed} failed` : `${r.status}: ${done}/${r.items.length}`;
+    hb("hpause", act); hb("hresume", r.status === "paused"); hb("hstop", act || r.status === "paused");
     $("log").innerHTML = "<tr><th>To</th><th>Status</th><th>Note</th></tr>" + r.items.map((i) => `<tr><td>${esc(i.type === "group" ? "👥 " + i.target : i.target + (i.label ? " (" + i.label + ")" : ""))}</td><td class="st-${i.status}">${esc(i.status)}</td><td>${esc(i.error)}</td></tr>`).join("");
   }
   W.runner.onLive = (l) => { $("countdown").textContent = l.countdown || l.note || ""; };
@@ -372,15 +397,17 @@
   (async function init() {
     const d = await W.store.get("draft");
     if (d) {
-      FIELDS.forEach((f) => { if (d[f] !== undefined) $(f).value = d[f]; });
+      FIELDS.forEach((f) => { if (d.v !== 2 && ["minD", "maxD", "batch", "batchP", "preset"].includes(f)) return; if (d[f] !== undefined) $(f).value = d[f]; });
       $("partial").checked = !!d.partial; csvRecipients = d.csv || [];
+      if (/^Namaste \{name\|Sir\/Madam\}, this is a reminder from Manoj/.test(d.msg || "")) $("msg").value = DEFAULT_MSG; // old built-in sample text
     } else {
-      $("msg").value = "Namaste {name|Sir/Madam}, this is a reminder from Manoj (India Post agent). Your RD installment is due this month. Please share the payment by the 10th. Thank you.";
+      $("msg").value = DEFAULT_MSG;
     }
     await renderTemplates(); await renderLists(); await refreshInfo(); await renderRun();
     if (await W.store.get("panelOpen")) setOpen(true);
+    if (await W.store.get("panelMini")) setMini(true);
     const r = await W.store.get("run");
-    if (r && ["running", "scheduled"].includes(r.status)) { setOpen(true); W.runner.tick(); }
+    if (r && ["running", "scheduled"].includes(r.status)) { setOpen(true); setMini(true); W.runner.tick(); }
   })();
   W.ui = { collectRecipients, refreshInfo }; // handy for tests
 })();

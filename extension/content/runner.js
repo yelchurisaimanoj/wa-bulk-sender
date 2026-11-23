@@ -4,6 +4,7 @@
   const wa = W.wa;
   const R = (W.runner = {});
   let ticking = false;
+  let inPageFails = 0; // after 2 failures in a row, stop trying the no-reload route this page session
   R.live = { countdown: "", note: "" }; // not persisted
   R.onLive = null;
   const emit = () => R.onLive && R.onLive(R.live);
@@ -78,7 +79,7 @@
     const dlg = wa.invalidNumberDialog();
     if (dlg) { wa.dismissDialog(dlg); return ["failed", "Not on WhatsApp (or invalid number)"]; }
     if (!loaded) return ["failed", "Chat did not open in time"];
-    await W.sleep(W.rand(900, 1800));
+    await W.sleep(W.rand(250, 600));
     return sendInOpenChat(run, item);
   }
 
@@ -102,7 +103,7 @@
     }
     if (forceType || !wa.composerText()) await wa.typeInto(composer, item.text);
     if (!wa.composerText()) return ["failed", "Could not type the message"];
-    await W.sleep(W.rand(500, 1200));
+    await W.sleep(W.rand(200, 500));
     await setStatus(item.id, "sending-click");
     if (!wa.pressSend()) return ["failed", "Send button not found"];
     const cleared = await wa.waitFor(() => !wa.composerText(), 15000);
@@ -114,7 +115,7 @@
       return ["failed", "WhatsApp Web not ready (logged out?)"];
     const o = await wa.openChatByName(item.target, !!run.cfg.partialGroups);
     if (!o.ok) return ["failed", o.error];
-    await W.sleep(W.rand(700, 1500));
+    await W.sleep(W.rand(250, 600));
     const res = await sendInOpenChat(run, item, true);
     await wa.clearSearch();
     return res;
@@ -143,6 +144,19 @@
 
         let result;
         if (next.type === "number") {
+          if (phoneInUrl() !== next.target && inPageFails < 2) {
+            R.live.countdown = "Opening " + next.target + "..."; emit();
+            const how = await wa.openNumberInPage(next.target);
+            if (how) {
+              inPageFails = 0;
+              result = await sendInOpenChat(run, next, true);
+              const fresh0 = await load();
+              if (!fresh0 || fresh0.status === "stopped") break;
+              await markResult(fresh0, fresh0.items.find((i) => i.id === next.id), result[0], result[1]);
+              continue;
+            }
+            inPageFails++;
+          }
           if (phoneInUrl() !== next.target) {
             next.tries = (next.tries || 0) + 1;
             if (next.tries > 3) { await markResult(run, next, "failed", "Could not open the chat"); continue; }

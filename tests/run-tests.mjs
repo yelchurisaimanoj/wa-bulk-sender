@@ -1,5 +1,5 @@
 import puppeteer from 'puppeteer-core'; import fs from 'node:fs';
-import { start, sent } from './server.mjs'; import path from 'node:path';
+import { start, sent, gets } from './server.mjs'; import path from 'node:path';
 const ROOT=path.resolve(path.dirname(new URL(import.meta.url).pathname),'..');
 const srv = await start(8099);
 const dl=ROOT+'/tests/dl'; fs.rmSync(dl,{recursive:true,force:true}); fs.mkdirSync(dl,{recursive:true});
@@ -10,6 +10,7 @@ page.on('dialog', d=>{console.log('DIALOG:',d.message().split('\n')[0]); d.accep
 page.on('console',m=>console.log('CONSOLE',m.text().slice(0,200)));
 page.on('pageerror', e=>console.log('PAGEERR',e.message));
 await page.goto('http://localhost:8099/');
+if(process.env.NOMODS){await page.evaluate(()=>localStorage.setItem('nomods','1'));await page.reload()}
 await page.waitForSelector('#wabs-host');
 const S=(fn,...a)=>page.evaluate(`(function(){const r=document.getElementById('wabs-host').shadowRoot;const $=id=>r.getElementById(id);return (${fn.toString()})(...${JSON.stringify(a)})})()`);
 const set=(id,v)=>S((id,v)=>{const e=$(id);e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}))},id,v);
@@ -18,13 +19,13 @@ const results={};
 const ok=(name,c)=>{results[name]=!!c;console.log(c?'PASS':'FAIL',name)};
 await click('fab');
 ok('panel opens', await S(()=>$('panel').classList.contains('open')));
-await set('nums','9876500001, 919876543000, 94940 22110, abc, 9000000009');
+await set('nums','9876500001, 919876543000, 98765 00001, abc, 9000000009');
 await set('grps','Family, Clients Batch A, Nonexistent Group');
 await set('msg','Hello {name|there}, test message.');
 await new Promise(r=>setTimeout(r,500));
 const info=await S(()=>$('numinfo').textContent); console.log('INFO:',info);
 ok('numbers parsed: 3 valid, 1 invalid, 1 duplicate', /3 valid/.test(info)&&/1 invalid/.test(info)&&/1 duplicate/.test(info)&&/3 groups/.test(info));
-await set('minD','3');await set('maxD','3');await set('batch','0');
+await set('minD','2');await set('maxD','2');await set('batch','0');
 await page.screenshot({path:ROOT+'/docs/shot-send-form.png'});
 await click('start');
 // wait for done
@@ -36,8 +37,9 @@ const log=await S(()=>[...r.querySelectorAll('#log tr')].slice(1).map(tr=>[...tr
 console.log(log.join('\n'));
 console.log('SENT LOG',JSON.stringify(sent.map(s=>[s.to,s.text])));
 ok('run finished', /done/.test(status));
-ok('number sent with prefilled text', sent.some(s=>s.to==='+919876500001'&&s.text==='Hello there, test message.'));
-ok('invalid number reported not on WhatsApp', log.some(l=>/919876543000.*failed.*Not on WhatsApp/i.test(l)));
+ok('number sent', sent.some(s=>s.to==='+919876500001'&&s.text==='Hello there, test message.'));
+if(process.env.NOMODS) ok('reload fallback: invalid number reported not on WhatsApp', log.some(l=>/919876543000.*failed.*Not on WhatsApp/i.test(l)));
+else { ok('no page reload between sends (1 page load total)', gets.filter(u=>u!=='/favicon.ico').length===1); console.log('GETS',gets.length); }
 ok('group Family sent', sent.some(s=>s.to==='Family'));
 ok('group Clients Batch A sent (exact match, not Batch B)', sent.some(s=>s.to==='Clients Batch A')&&!sent.some(s=>s.to==='Clients Batch B'));
 ok('missing group failed cleanly', log.some(l=>/Nonexistent Group.*failed.*No chat named/.test(l)));

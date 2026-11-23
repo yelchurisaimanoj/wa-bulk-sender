@@ -188,6 +188,39 @@
     return { ok: true, title: wa.headerTitle(), how };
   };
 
+  // Open a 1:1 chat for a phone number without reloading. Returns true only when the right chat is verified open.
+  wa.activeChatMatches = async (num) => {
+    try {
+      const id = await wa.bridge("activeChatId", null, 3000);
+      return id === num + "@c.us";
+    } catch (e) {
+      const d = (wa.headerTitle() || "").replace(/\D/g, "");
+      return d.length >= 8 && d.endsWith(num.slice(-10));
+    }
+  };
+  wa.openNumberInPage = async (num) => {
+    // 1) WhatsApp's own open-chat command
+    try {
+      await wa.bridge("openChat", num, 10000);
+      if (await wa.waitFor(() => wa.composer(), 6000) && (await wa.waitFor(() => wa.activeChatMatches(num), 6000))) return "app";
+    } catch (e) {}
+    // 2) type the number in the search box and click the matching row
+    const s = first(SEL.search);
+    if (!s) return null;
+    await wa.typeInto(s, num);
+    await W.sleep(1500);
+    const pane = first(SEL.pane) || document;
+    const tail = num.slice(-10);
+    const rows = [...pane.querySelectorAll('[role="listitem"],[role="row"],[data-testid="cell-frame-container"]')];
+    const hit = rows.find((r) => (r.innerText || "").replace(/\D/g, "").includes(tail));
+    if (hit) {
+      wa.click(hit);
+      if (await wa.waitFor(() => wa.composer(), 6000) && (await wa.waitFor(() => wa.activeChatMatches(num), 4000))) { await wa.clearSearch(); return "search"; }
+    }
+    await wa.clearSearch();
+    return null;
+  };
+
   // ---- attachments (experimental) ----
   wa.attachImage = async (img, caption) => {
     const clip = first(SEL.attach);

@@ -78,7 +78,31 @@
     });
   }
 
-  window.addEventListener("message", (ev) => {
+  function activeChatId() {
+    const C = req("WAWebCollections");
+    if (!C || !C.Chat || typeof C.Chat.getActive !== "function") throw new Error("store-unavailable");
+    const a = C.Chat.getActive();
+    return a ? ser(a.id) : null;
+  }
+
+  // Open (or create) a 1:1 chat inside the running app, no page reload.
+  async function openChat(num) {
+    const CmdMod = req("WAWebCmd");
+    const Find = req("WAWebFindChatAction");
+    const WidF = req("WAWebWidFactory");
+    if (!CmdMod || !Find || !WidF) throw new Error("modules-unavailable");
+    const wid = WidF.createWid ? WidF.createWid(num + "@c.us") : WidF.createUserWid(num, "c.us");
+    const finder = Find.findOrCreateLatestChat || Find.findChat;
+    const r = await finder(wid);
+    const chat = (r && r.chat) || r;
+    const cmd = CmdMod.Cmd || CmdMod.default || CmdMod;
+    if (cmd.openChatBottom) await cmd.openChatBottom({ chat });
+    else if (cmd.openChatAt) await cmd.openChatAt({ chat });
+    else throw new Error("modules-unavailable");
+    return true;
+  }
+
+  window.addEventListener("message", async (ev) => {
     if (ev.source !== window || !ev.data || ev.data.source !== "WABS_REQ") return;
     const { id, cmd, arg } = ev.data;
     let res;
@@ -87,6 +111,8 @@
       if (cmd === "ping") data = { store: !!(req("WAWebCollections") || {}).Chat };
       else if (cmd === "listChats") data = listChats();
       else if (cmd === "groupMembers") data = groupMembers(arg);
+      else if (cmd === "activeChatId") data = activeChatId();
+      else if (cmd === "openChat") data = await openChat(arg);
       else throw new Error("unknown-command");
       res = { ok: true, data };
     } catch (e) {
